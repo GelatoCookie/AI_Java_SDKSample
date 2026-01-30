@@ -29,9 +29,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * Handler class for RFID and Scanner operations using Zebra SDKs.
- * This class encapsulates the Zebra RFID API and Scanner Control API logic,
- * managing connections, inventory, and barcode scanning in background threads.
+ * Handler class for RFID operations.
+ * This class encapsulates the Zebra RFID API logic.
  */
 class RFIDHandler implements Readers.RFIDReaderEventHandler {
 
@@ -50,13 +49,12 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
     private final int MAX_POWER = 270;
     private final String readerName = "RFD4031-G10B700-WR";
     
-    /** Executor service for running blocking SDK operations off the main thread. */
+    /** Executor for background tasks. */
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
     /**
-     * Initializes the RFIDHandler with the activity context and sets up scanner handling.
-     * 
-     * @param activity The MainActivity instance for context and UI updates.
+     * Initializes the RFIDHandler with the activity context.
+     * @param activity The MainActivity context.
      */
     void onCreate(MainActivity activity) {
         context = activity;
@@ -66,22 +64,12 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
         InitSDK();
     }
 
-    /**
-     * Placeholder for Test1 functionality.
-     * @return A string indicating the action.
-     */
     public String Test1() { return "TO DO"; }
-    
-    /**
-     * Placeholder for Test2 functionality.
-     * @return A string indicating the action.
-     */
     public String Test2() { return "TODO2"; }
 
     /**
-     * Resets the reader's antenna and singulation settings to default values.
-     * 
-     * @return A message string indicating success or the error encountered.
+     * Resets the reader settings to defaults.
+     * @return Success or error message.
      */
     public String Defaults() {
         if (!isReaderConnected()) return "Not connected";
@@ -104,18 +92,13 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
         return "Default settings applied";
     }
 
-    /**
-     * Checks if the RFID reader is currently connected.
-     * 
-     * @return true if the reader object exists and is connected.
-     */
     private boolean isReaderConnected() {
         return reader != null && reader.isConnected();
     }
 
     /**
-     * Toggles the connection status of the RFID reader.
-     * Disconnects if currently connected, or initiates a connection if not.
+     * Toggles the connection to the reader.
+     * If connected, it disconnects. If disconnected, it attempts to connect.
      */
     public void toggleConnection() {
         if (isReaderConnected()) {
@@ -125,9 +108,6 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
         }
     }
 
-    /**
-     * Called when the activity resumes. Attempts to reconnect the reader in the background.
-     */
     void onResume() {
         executor.execute(() -> {
             String result = connect();
@@ -137,24 +117,15 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
         });
     }
 
-    /**
-     * Called when the activity pauses. Disconnects the reader.
-     */
     void onPause() {
         disconnect();
     }
 
-    /**
-     * Cleans up resources when the activity is destroyed.
-     */
     void onDestroy() {
         dispose();
         executor.shutdown();
     }
 
-    /**
-     * Initializes the RFID SDK by searching for available readers over USB and Bluetooth.
-     */
     private void InitSDK() {
         Log.d(TAG, "InitSDK");
         if (readers == null) {
@@ -196,16 +167,14 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
         }
     }
 
-    /** Placeholder for test functionality. */
     public void testFunction() {}
 
-    /**
-     * Initiates the connection process for the RFID reader in a background thread.
-     */
     private void connectReader() {
+        // Offload the entire connection process to a background thread to keep UI responsive
         executor.execute(new Runnable() {
             @Override
             public void run() {
+                // Update UI to show connection is in progress
                 if (context != null) {
                     context.updateReaderStatus("Connecting...", false);
                 }
@@ -215,10 +184,12 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
                         GetAvailableReader();
                         String result = (reader != null) ? connect() : "Failed to find reader";
                         
+                        // Update UI with the final result
                         if (context != null) {
                             context.updateReaderStatus(result, isReaderConnected());
                         }
                     } else {
+                        // Already connected, just update UI
                         if (context != null) {
                             context.updateReaderStatus("Connected: " + reader.getHostName(), true);
                         }
@@ -228,9 +199,6 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
         });
     }
 
-    /**
-     * Populates the available reader list and selects a reader to connect to.
-     */
     private synchronized void GetAvailableReader() {
         if (readers != null) {
             readers.attach(this);
@@ -257,17 +225,11 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
         }
     }
 
-    /**
-     * SDK Callback triggered when a new RFID reader is detected.
-     */
     @Override
     public void RFIDReaderAppeared(ReaderDevice readerDevice) {
         connectReader();
     }
 
-    /**
-     * SDK Callback triggered when an RFID reader becomes unavailable.
-     */
     @Override
     public void RFIDReaderDisappeared(ReaderDevice readerDevice) {
         if (context != null) context.sendToast("RFIDReaderDisappeared: " + readerDevice.getName());
@@ -276,11 +238,6 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
         }
     }
 
-    /**
-     * Establishes a connection to the selected reader and configures events and scanner SDK.
-     * 
-     * @return Status message string.
-     */
     private synchronized String connect() {
         if (reader != null) {
             try {
@@ -302,9 +259,6 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
         return "Disconnected";
     }
 
-    /**
-     * Configures the RFID reader to notify for handheld trigger, tag reads, and disconnects.
-     */
     private void ConfigureReader() {
         IRFIDLogger.getLogger("SDKSampleApp").EnableDebugLogs(true);
         if (reader.isConnected()) {
@@ -321,9 +275,6 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
         }
     }
 
-    /**
-     * Initializes the Zebra Scanner SDK and attempts to establish a session with the reader's scanner.
-     */
     public void setupScannerSDK() {
         if (sdkHandler == null) {
             sdkHandler = new SDKHandler(context);
@@ -368,9 +319,6 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
         }
     }
 
-    /**
-     * Disconnects the RFID reader and terminates the scanner session.
-     */
     private synchronized void disconnect() {
         try {
             if (reader != null) {
@@ -390,9 +338,6 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
         }
     }
 
-    /**
-     * Completely releases reader and sdk resources.
-     */
     private synchronized void dispose() {
         disconnect();
         try {
@@ -405,9 +350,6 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
         }
     }
 
-    /**
-     * Starts an inventory operation on the connected reader.
-     */
     synchronized void performInventory() {
         try {
             if (reader != null && reader.isConnected()) reader.Actions.Inventory.perform();
@@ -416,9 +358,6 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
         }
     }
 
-    /**
-     * Stops a running inventory operation.
-     */
     synchronized void stopInventory() {
         try {
             if (reader != null && reader.isConnected()) reader.Actions.Inventory.stop();
@@ -427,17 +366,11 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
         }
     }
 
-    /**
-     * Triggers the barcode scanner to perform a scan.
-     */
     public void scanCode() {
         String in_xml = "<inArgs><scannerID>" + scannerID + "</scannerID></inArgs>";
         executor.execute(() -> executeCommand(DCSSDKDefs.DCSSDK_COMMAND_OPCODE.DCSSDK_DEVICE_PULL_TRIGGER, in_xml, new StringBuilder(), scannerID));
     }
 
-    /**
-     * Helper to execute a command on the Zebra Scanner SDK.
-     */
     private boolean executeCommand(DCSSDKDefs.DCSSDK_COMMAND_OPCODE opCode, String inXML, StringBuilder outXML, int scannerID) {
         if (sdkHandler != null) {
             if (outXML == null) outXML = new StringBuilder();
@@ -447,9 +380,6 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
         return false;
     }
 
-    /**
-     * Internal listener for RFID reader events such as tag data and status updates.
-     */
     public class EventHandler implements RfidEventsListener {
         @Override
         public void eventReadNotify(RfidReadEvents e) {
@@ -482,17 +412,10 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
         }
     }
 
-    /**
-     * Interface to be implemented by the UI to handle SDK events.
-     */
     interface ResponseHandlerInterface {
-        /** Called when RFID tags are read. */
         void handleTagdata(TagData[] tagData);
-        /** Called when the reader's hardware trigger is pressed or released. */
         void handleTriggerPress(boolean pressed);
-        /** Called when barcode data is received. */
         void barcodeData(String val);
-        /** Utility to display toast messages. */
         void sendToast(String val);
     }
 }
