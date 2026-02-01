@@ -2,6 +2,7 @@ package com.zebra.rfid.demo.sdksample;
 
 import android.Manifest;
 import android.annotation.SuppressLint;
+import android.app.ProgressDialog;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
@@ -63,6 +64,8 @@ public class MainActivity extends AppCompatActivity implements RFIDHandler.Respo
     private final HashSet<String> tagSet = new HashSet<>();
     
     private static final int BLUETOOTH_PERMISSION_REQUEST_CODE = 100;
+    
+    private ProgressDialog progressDialog;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -109,6 +112,7 @@ public class MainActivity extends AppCompatActivity implements RFIDHandler.Respo
      */
     public void updateReaderStatus(String status, boolean isConnected) {
         runOnUiThread(() -> {
+            dismissProgressDialog();
             if (statusTextViewRFID != null) {
                 statusTextViewRFID.setText(status);
                 if (isConnected) {
@@ -196,6 +200,7 @@ public class MainActivity extends AppCompatActivity implements RFIDHandler.Respo
     protected void onDestroy() {
         super.onDestroy();
         rfidHandler.onDestroy();
+        dismissProgressDialog();
     }
 
     /**
@@ -326,5 +331,29 @@ public class MainActivity extends AppCompatActivity implements RFIDHandler.Respo
     @Override
     public void sendToast(String val) {
         runOnUiThread(() -> Toast.makeText(MainActivity.this, val, Toast.LENGTH_SHORT).show());
+    }
+
+    @Override
+    public void showProgressDialog(String message) {
+        runOnUiThread(() -> {
+            if (progressDialog == null) {
+                progressDialog = new ProgressDialog(this);
+                progressDialog.setIndeterminate(true);
+                progressDialog.setCancelable(false);
+            }
+            progressDialog.setMessage(message);
+            if (!progressDialog.isShowing()) {
+                progressDialog.show();
+            }
+        });
+    }
+
+    @Override
+    public void dismissProgressDialog() {
+        runOnUiThread(() -> {
+            if (progressDialog != null && progressDialog.isShowing()) {
+                progressDialog.dismiss();
+            }
+        });
     }
 }

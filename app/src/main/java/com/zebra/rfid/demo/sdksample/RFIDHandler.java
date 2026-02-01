@@ -25,6 +25,8 @@ import com.zebra.scannercontrol.DCSScannerInfo;
 import com.zebra.scannercontrol.SDKHandler;
 
 import java.util.ArrayList;
+import java.util.Timer;
+import java.util.TimerTask;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -203,26 +205,51 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
      * Initiates the connection process for the RFID reader in a background thread.
      */
     private void connectReader() {
-        executor.execute(new Runnable() {
+        if (context != null) {
+            context.showProgressDialog("Searching and connecting to reader...");
+        }
+
+        final long startTime = System.currentTimeMillis();
+        final Timer timer = new Timer();
+        timer.scheduleAtFixedRate(new TimerTask() {
             @Override
             public void run() {
                 if (context != null) {
-                    context.updateReaderStatus("Connecting...", false);
+                    long elapsed = (System.currentTimeMillis() - startTime) / 1000;
+                    context.showProgressDialog("Searching and connecting to reader... " + elapsed + "s");
                 }
+            }
+        }, 1000, 1000);
 
-                synchronized (RFIDHandler.this) {
-                    if (!isReaderConnected()) {
-                        GetAvailableReader();
-                        String result = (reader != null) ? connect() : "Failed to find reader";
-                        
-                        if (context != null) {
-                            context.updateReaderStatus(result, isReaderConnected());
-                        }
-                    } else {
-                        if (context != null) {
-                            context.updateReaderStatus("Connected: " + reader.getHostName(), true);
+        executor.execute(new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    if (context != null) {
+                        context.updateReaderStatus("Connecting...", false);
+                    }
+
+                    synchronized (RFIDHandler.this) {
+                        if (!isReaderConnected()) {
+                            GetAvailableReader();
+                            String result = (reader != null) ? connect() : "Failed to find reader";
+                            
+                            if (context != null) {
+                                if (isReaderConnected()) {
+                                    long totalTime = (System.currentTimeMillis() - startTime) / 1000;
+                                    result += " (" + totalTime + "s)";
+                                }
+                                context.updateReaderStatus(result, isReaderConnected());
+                            }
+                        } else {
+                            if (context != null) {
+                                context.updateReaderStatus("Connected: " + reader.getHostName(), true);
+                            }
                         }
                     }
+                } finally {
+                    timer.cancel();
+                    timer.purge();
                 }
             }
         });
@@ -239,7 +266,7 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
                 if (availableReaders != null && !availableReaders.isEmpty()) {
                     availableRFIDReaderList = new ArrayList<>(availableReaders);
                     if (availableRFIDReaderList.size() == 1) {
-                        readerDevice = availableRFIDReaderList.get(0);
+                        readerDevice = availableReaders.get(0);
                         reader = readerDevice.getRFIDReader();
                     } else {
                         for (ReaderDevice device : availableRFIDReaderList) {
@@ -287,16 +314,24 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
                 if (!reader.isConnected()) {
                     reader.connect();
                     ConfigureReader();
-                    setupScannerSDK();
+                    if (reader.getHostName().startsWith("TC22R") || reader.getHostName().startsWith("RFID")){
+                        //setup DW for TC22R and EM45, TC53e-RFID
+                    }
+                    else {
+                        setupScannerSDK();
+                    }
                     if (reader.isConnected()) {
                         return "Connected: " + reader.getHostName();
                     }
                 } else {
                     return "Connected: " + reader.getHostName();
                 }
-            } catch (InvalidUsageException | OperationFailureException e) {
-                Log.e(TAG, "Connection failed", e);
-                return "Connection failed: " + e.getMessage();
+            } catch (InvalidUsageException e) {
+                Log.e(TAG, "Connection failed InvalidUsageException: " + e.getMessage());
+                return "Connection failed InvalidUsageException: " + e.getMessage();
+            } catch (OperationFailureException e) {
+                Log.e(TAG, "Connection failed: " +  e.getResults());
+                return "Connection failed: " + e.getResults();
             }
         }
         return "Disconnected";
@@ -494,5 +529,9 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
         void barcodeData(String val);
         /** Utility to display toast messages. */
         void sendToast(String val);
+        /** Shows a non-blocking progress dialog on the UI. */
+        void showProgressDialog(String message);
+        /** Dismisses the progress dialog from the UI. */
+        void dismissProgressDialog();
     }
 }
