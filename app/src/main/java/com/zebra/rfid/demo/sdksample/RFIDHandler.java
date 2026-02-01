@@ -1,5 +1,7 @@
 package com.zebra.rfid.demo.sdksample;
 
+import android.os.Handler;
+import android.os.Looper;
 import android.util.Log;
 import android.widget.TextView;
 
@@ -48,6 +50,18 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
     private int scannerID;
     private final int MAX_POWER = 270;
     private final String readerName = "RFD4031-G10B700-WR";
+
+    private final Handler uiHandler = new Handler(Looper.getMainLooper());
+    private int connectionTimer = 0;
+    private final Runnable timerRunnable = new Runnable() {
+        @Override
+        public void run() {
+            if (context != null) {
+                context.updateReaderStatus("Connecting... " + connectionTimer++ + "s", false);
+                uiHandler.postDelayed(this, 1000);
+            }
+        }
+    };
     
     /** Executor for background tasks. */
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
@@ -242,19 +256,31 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
         if (reader != null) {
             try {
                 if (!reader.isConnected()) {
-                    reader.connect();
+                    connectionTimer = 0;
+                    uiHandler.post(timerRunnable);
+                    long startTime = System.currentTimeMillis();
+                    try {
+                        reader.connect();
+                    } finally {
+                        uiHandler.removeCallbacks(timerRunnable);
+                    }
+                    long duration = System.currentTimeMillis() - startTime;
                     ConfigureReader();
                     setupScannerSDK();
                     if (reader.isConnected()) {
-                        return "Connected: " + reader.getHostName();
+                        return "Connected: " + reader.getHostName() + " (" + duration + " ms)";
                     }
                 } else {
                     return "Connected: " + reader.getHostName();
                 }
-            } catch (InvalidUsageException | OperationFailureException e) {
-                Log.e(TAG, "Connection failed", e);
+            } catch (InvalidUsageException e) {
+                Log.e(TAG, "Connection failed: " + e.getMessage());
                 return "Connection failed: " + e.getMessage();
+            } catch (OperationFailureException e) {
+                Log.e(TAG, "Connection failed: " + e.getStatusDescription());
+                return "Connection failed: " + e.getStatusDescription();
             }
+
         }
         return "Disconnected";
     }
