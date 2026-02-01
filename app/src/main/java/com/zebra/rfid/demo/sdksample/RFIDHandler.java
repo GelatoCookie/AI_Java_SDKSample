@@ -211,7 +211,7 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
 
         final long startTime = System.currentTimeMillis();
         final Timer timer = new Timer();
-        timer.scheduleAtFixedRate(new TimerTask() {
+        timer.schedule(new TimerTask() {
             @Override
             public void run() {
                 if (context != null) {
@@ -228,12 +228,10 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
                     if (context != null) {
                         context.updateReaderStatus("Connecting...", false);
                     }
-
                     synchronized (RFIDHandler.this) {
                         if (!isReaderConnected()) {
                             GetAvailableReader();
                             String result = (reader != null) ? connect() : "Failed to find reader";
-                            
                             if (context != null) {
                                 if (isReaderConnected()) {
                                     long totalTime = (System.currentTimeMillis() - startTime) / 1000;
