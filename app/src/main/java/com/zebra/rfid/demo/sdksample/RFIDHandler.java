@@ -33,6 +33,7 @@ import java.util.concurrent.Executors;
 /**
  * Handler class for RFID operations.
  * This class encapsulates the Zebra RFID API logic.
+ * Feb 01, 2026 Create non-blocking uiHandler for connecting
  */
 class RFIDHandler implements Readers.RFIDReaderEventHandler {
 
