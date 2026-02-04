@@ -1,0 +1,75 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "Build Java Project (Gradle)",
+			"type": "shell",
+			"command": "./gradlew build",
+			"isBackground": false,
+			"problemMatcher": [
+				"$gradle"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build Java Project (Gradle)",
+			"type": "shell",
+			"command": "./gradlew build",
+			"isBackground": false,
+			"problemMatcher": [
+				"$gradle"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Install and Launch APK on Device",
+			"type": "shell",
+			"command": "./gradlew installDebug",
+			"isBackground": false,
+			"problemMatcher": [
+				"$gradle"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Build sdksample Debug APK",
+			"type": "shell",
+			"command": "./gradlew :app:assembleDebug",
+			"isBackground": false,
+			"problemMatcher": [
+				"$gradle"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Rebuild Project (Clean & Build)",
+			"type": "shell",
+			"command": "./gradlew clean assembleDebug",
+			"isBackground": false,
+			"problemMatcher": [
+				"$gradle"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Assemble Release APK",
+			"type": "shell",
+			"command": "./gradlew :app:assembleRelease",
+			"isBackground": false,
+			"problemMatcher": [
+				"$gradle"
+			],
+			"group": "build"
+		},
+		{
+			"label": "Run Instrumented Tests",
+			"type": "shell",
+			"command": "./gradlew :app:connectedAndroidTest",
+			"isBackground": false,
+			"problemMatcher": [
+				"$gradle"
+			],
+			"group": "test"
+		}
+	]
+}

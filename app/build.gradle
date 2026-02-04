@@ -5,7 +5,7 @@ android {
     namespace 'com.zebra.rfid.demo.sdksample'
     defaultConfig {
         applicationId "com.zebra.rfid.demo.sdksample"
-        minSdkVersion 26
+        minSdkVersion 28
         targetSdkVersion 33
         versionCode 1
         versionName "1.0"

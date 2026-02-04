@@ -26,7 +26,11 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+            <!-- DataWedge intent filter for barcode, status, and version info -->
+            <intent-filter>
+                <action android:name="com.symbol.datawedge.api.RESULT_ACTION" />
+                <action android:name="com.symbol.datawedge.api.ACTION" />
+            </intent-filter>
         </activity>
     </application>
-
 </manifest>

@@ -5,6 +5,10 @@ import android.annotation.SuppressLint;
 import android.content.pm.PackageManager;
 import android.os.Build;
 import android.os.Bundle;
+import android.content.BroadcastReceiver;
+import android.content.Context;
+import android.content.Intent;
+import android.content.IntentFilter;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -33,6 +37,36 @@ import java.util.HashSet;
 public class MainActivity extends AppCompatActivity implements RFIDHandler.ResponseHandlerInterface {
 
     private static final String TAG = "MainActivity";
+    // DataWedge intent actions and extras
+    private static final String DW_INTENT_ACTION = "com.symbol.datawedge.api.RESULT_ACTION";
+    private static final String DW_BARCODE_ACTION = "com.symbol.datawedge.api.ACTION";
+    private static final String DW_BARCODE_EXTRA = "com.symbol.datawedge.data_string";
+    private static final String DW_STATUS_EXTRA = "com.symbol.datawedge.api.RESULT_GET_STATUS";
+    private static final String DW_VERSION_EXTRA = "com.symbol.datawedge.api.RESULT_GET_VERSION_INFO";
+
+    private final BroadcastReceiver dataWedgeReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            String action = intent.getAction();
+            if (DW_INTENT_ACTION.equals(action) || DW_BARCODE_ACTION.equals(action)) {
+                // Barcode data
+                if (intent.hasExtra(DW_BARCODE_EXTRA)) {
+                    String barcode = intent.getStringExtra(DW_BARCODE_EXTRA);
+                    barcodeData(barcode);
+                }
+                // Status info
+                if (intent.hasExtra(DW_STATUS_EXTRA)) {
+                    String status = intent.getStringExtra(DW_STATUS_EXTRA);
+                    sendToast("DW Status: " + status);
+                }
+                // Version info
+                if (intent.hasExtra(DW_VERSION_EXTRA)) {
+                    String version = intent.getStringExtra(DW_VERSION_EXTRA);
+                    sendToast("DW Version: " + version);
+                }
+            }
+        }
+    };
     
     /** TextView to display RFID connection and operation status. */
     public TextView statusTextViewRFID;
@@ -64,10 +98,88 @@ public class MainActivity extends AppCompatActivity implements RFIDHandler.Respo
     
     private static final int BLUETOOTH_PERMISSION_REQUEST_CODE = 100;
 
-    @Override
+
+    /**
+     * Create DataWedge profile to receive barcode data and disable RFID plug-in
+     */
+    private void createDataWedgeProfile() {
+        final String PROFILE_NAME = "RFIDSampleProfile";
+        final String PACKAGE_NAME = getPackageName();
+        final String ACTIVITY_NAME = getClass().getName();
+
+        // 1. Create profile
+        Bundle bCreateProfile = new Bundle();
+        bCreateProfile.putString("com.symbol.datawedge.api.CREATE_PROFILE", PROFILE_NAME);
+        sendDataWedgeCommand("com.symbol.datawedge.api.ACTION", bCreateProfile);
+
+        // 2. Configure profile: barcode enabled, RFID disabled, intent output
+        Bundle bConfig = new Bundle();
+        bConfig.putString("PROFILE_NAME", PROFILE_NAME);
+        bConfig.putString("PROFILE_ENABLED", "true");
+        bConfig.putString("CONFIG_MODE", "UPDATE");
+
+        // Barcode input plugin
+        Bundle barcodeProps = new Bundle();
+        barcodeProps.putString("PLUGIN_NAME", "BARCODE");
+        barcodeProps.putString("RESET_CONFIG", "true");
+        Bundle barcodeParams = new Bundle();
+        barcodeParams.putString("scanner_selection_by_identifier", "AUTO");
+        barcodeProps.putBundle("PARAM_LIST", barcodeParams);
+
+        // RFID input plugin (disable)
+        Bundle rfidProps = new Bundle();
+        rfidProps.putString("PLUGIN_NAME", "RFID");
+        rfidProps.putString("RESET_CONFIG", "true");
+        Bundle rfidParams = new Bundle();
+        rfidParams.putString("rfid_input_enabled", "false");
+        rfidProps.putBundle("PARAM_LIST", rfidParams);
+
+        // Intent output plugin
+        Bundle intentProps = new Bundle();
+        intentProps.putString("PLUGIN_NAME", "INTENT");
+        intentProps.putString("RESET_CONFIG", "true");
+        Bundle intentParams = new Bundle();
+        intentParams.putString("intent_output_enabled", "true");
+        intentParams.putString("intent_action", "com.symbol.datawedge.api.ACTION");
+        intentParams.putString("intent_delivery", "2"); // 2 = broadcast
+        intentProps.putBundle("PARAM_LIST", intentParams);
+
+        ArrayList<Bundle> pluginConfig = new ArrayList<>();
+        pluginConfig.add(barcodeProps);
+        pluginConfig.add(rfidProps);
+        pluginConfig.add(intentProps);
+        bConfig.putParcelableArrayList("PLUGIN_CONFIG", pluginConfig);
+
+        // Associate app with profile
+        Bundle appAssoc = new Bundle();
+        appAssoc.putString("PACKAGE_NAME", PACKAGE_NAME);
+        appAssoc.putStringArray("ACTIVITY_LIST", new String[]{"*"});
+        ArrayList<Bundle> appList = new ArrayList<>();
+        appList.add(appAssoc);
+        bConfig.putParcelableArrayList("APP_LIST", appList);
+
+        sendDataWedgeCommand("com.symbol.datawedge.api.ACTION", bConfig);
+    }
+
+    private void sendDataWedgeCommand(String action, Bundle extras) {
+        Intent i = new Intent();
+        i.setAction(action);
+        if (extras != null) i.putExtras(extras);
+        sendBroadcast(i);
+    }
+
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        // Programmatically create DataWedge profile for barcode, disable RFID
+        createDataWedgeProfile();
+
+        // Register DataWedge broadcast receiver
+        IntentFilter filter = new IntentFilter();
+        filter.addAction(DW_INTENT_ACTION);
+        filter.addAction(DW_BARCODE_ACTION);
+        registerReceiver(dataWedgeReceiver, filter);
 
         statusTextViewRFID = findViewById(R.id.textViewStatusrfid);
         if (statusTextViewRFID != null) {
@@ -79,22 +191,22 @@ public class MainActivity extends AppCompatActivity implements RFIDHandler.Respo
         }
 
         scanResult = findViewById(R.id.scanResult);
-        
+
         // Initialize ListView and Adapter
         tagListView = findViewById(R.id.tag_list);
         tagAdapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, tagList);
         if (tagListView != null) {
             tagListView.setAdapter(tagAdapter);
         }
-        
+
         btnStart = findViewById(R.id.TestButton);
         btnStop = findViewById(R.id.TestButton2);
         btnScan = findViewById(R.id.scan);
-        
+
         // Initially inventory is not running and reader is not connected
         if (btnStart != null) btnStart.setEnabled(false);
         if (btnStop != null) btnStop.setEnabled(false);
-        
+
         // Initially disable scan button until session established
         if (btnScan != null) btnScan.setEnabled(false);
 
@@ -196,6 +308,7 @@ public class MainActivity extends AppCompatActivity implements RFIDHandler.Respo
     protected void onDestroy() {
         super.onDestroy();
         rfidHandler.onDestroy();
+        unregisterReceiver(dataWedgeReceiver);
     }
 
     /**

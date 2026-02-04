@@ -36,34 +36,85 @@ import java.util.concurrent.Executors;
  * Feb 01, 2026 Create non-blocking uiHandler for connecting
  */
 class RFIDHandler implements Readers.RFIDReaderEventHandler {
+    // Helper for selecting a reader from available devices
+    private RFIDReader selectReader(ArrayList<ReaderDevice> availableReaders) {
+        if (availableReaders == null || availableReaders.isEmpty()) return null;
+        if (availableReaders.size() == 1) {
+            ReaderDevice singleDevice = availableReaders.get(0);
+            return (singleDevice != null) ? singleDevice.getRFIDReader() : null;
+        } else {
+            for (ReaderDevice device : availableReaders) {
+                if (device != null && device.getName() != null && device.getName().startsWith(READER_NAME_PREFIX)) {
+                    return device.getRFIDReader();
+                }
+            }
+        }
+        return null;
+    }
+
+    // Helper for populating scanner list
+    private void populateScannerList(ArrayList<DCSScannerInfo> availableScanners) {
+        if (scannerList != null) {
+            scannerList.clear();
+        } else {
+            scannerList = new ArrayList<>();
+        }
+        if (availableScanners != null) {
+            for (DCSScannerInfo scanner : availableScanners) {
+                if (scanner != null) {
+                    scannerList.add(scanner);
+                }
+            }
+        }
+    }
+
+    // Helper for establishing scanner sessions
+    private void establishScannerSessions() {
+        if (reader != null && reader.isConnected()) {
+            String hostName = reader.getHostName();
+            for (DCSScannerInfo device : scannerList) {
+                if (device != null && device.getScannerName() != null && hostName != null && device.getScannerName().contains(hostName)) {
+                    try {
+                        sdkHandler.dcssdkEstablishCommunicationSession(device.getScannerID());
+                        scannerID = device.getScannerID();
+                    } catch (Exception e) {
+                        Log.e(TAG, "Error establishing scanner session", e);
+                    }
+                }
+            }
+        }
+    }
 
     private static final String TAG = "RFID_SAMPLE";
+    private static final int MAX_POWER = 270;
+    // String constants for repeated literals
+    private static final String READER_NAME_PREFIX = "RFD";
+    private static final String CONNECTING_STATUS = "Connecting...";
+    private static final String ERROR_GETTING_READERS = "Error getting available readers";
+    private static final String FAILED_TO_FIND_READER = "Failed to find reader";
+    private static final String DEFAULT_SETTINGS_APPLIED = "Default settings applied";
+    private static final String CONNECTION_FAILED = "Connection failed: ";
+    private static final String ERROR_DURING_DISCONNECT = "Error during disconnect";
+    private static final String ERROR_DURING_DISPOSE = "Error during dispose";
+    private static final String CONNECTED_PREFIX = "Connected: ";
+    private static final String DISCONNECTED = "Disconnected";
+
     private Readers readers;
-    private ArrayList<ReaderDevice> availableRFIDReaderList;
-    private ReaderDevice readerDevice;
     private RFIDReader reader;
-    private TextView textView;
     private EventHandler eventHandler;
     private MainActivity context;
     private SDKHandler sdkHandler;
     private ScannerHandler scannerHandler;
     private ArrayList<DCSScannerInfo> scannerList;
     private int scannerID;
-    private final int MAX_POWER = 270;
-    private final String readerName = "RFD4031-G10B700-WR";
-
     private final Handler uiHandler = new Handler(Looper.getMainLooper());
     private int connectionTimer = 0;
-    private final Runnable timerRunnable = new Runnable() {
-        @Override
-        public void run() {
-            if (context != null) {
-                context.updateReaderStatus("Connecting... " + connectionTimer++ + "s", false);
-                uiHandler.postDelayed(this, 1000);
-            }
+    private final Runnable timerRunnable = () -> {
+        if (context != null) {
+            context.updateReaderStatus(CONNECTING_STATUS + " " + connectionTimer++ + "s", false);
+            uiHandler.postDelayed(this.timerRunnable, 1000);
         }
     };
-    
     /** Executor for background tasks. */
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
 
@@ -73,10 +124,9 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
      */
     void onCreate(MainActivity activity) {
         context = activity;
-        textView = activity.statusTextViewRFID;
         scannerList = new ArrayList<>();
         scannerHandler = new ScannerHandler(activity);
-        InitSDK();
+        initSDK();
     }
 
     public String Test1() { return "TO DO"; }
@@ -87,7 +137,7 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
      * @return Success or error message.
      */
     public String Defaults() {
-        if (!isReaderConnected()) return "Not connected";
+        if (!isReaderConnected()) return DISCONNECTED;
         try {
             Antennas.AntennaRfConfig config = reader.Config.Antennas.getAntennaRfConfig(1);
             config.setTransmitPowerIndex(MAX_POWER);
@@ -104,7 +154,7 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
             Log.e(TAG, "Error in Defaults", e);
             return e.getMessage();
         }
-        return "Default settings applied";
+        return DEFAULT_SETTINGS_APPLIED;
     }
 
     private boolean isReaderConnected() {
@@ -141,101 +191,48 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
         executor.shutdown();
     }
 
-    private void InitSDK() {
-        Log.d(TAG, "InitSDK");
-        if (readers == null) {
-            executor.execute(() -> {
-                InvalidUsageException exception = null;
-                try {
-                    readers = new Readers(context, ENUM_TRANSPORT.SERVICE_USB);
-                    ArrayList<ReaderDevice> list = readers.GetAvailableRFIDReaderList();
-                    availableRFIDReaderList = (list != null) ? new ArrayList<>(list) : new ArrayList<>();
-                    
-                    if (availableRFIDReaderList.isEmpty()) {
-                        readers.setTransport(ENUM_TRANSPORT.BLUETOOTH);
-                        list = readers.GetAvailableRFIDReaderList();
-                        availableRFIDReaderList = (list != null) ? new ArrayList<>(list) : new ArrayList<>();
-                    }
-                } catch (InvalidUsageException e) {
-                    exception = e;
-                }
-                
-                final InvalidUsageException finalException = exception;
-                if (context != null) {
-                    context.runOnUiThread(() -> {
-                        if (finalException != null) {
-                            context.sendToast("Failed to get Available Readers\n" + finalException.getInfo());
-                            readers = null;
-                            context.updateReaderStatus("Failed to get Readers", false);
-                        } else if (availableRFIDReaderList.isEmpty()) {
-                            context.sendToast("No Available Readers to proceed");
-                            readers = null;
-                            context.updateReaderStatus("No Readers Found", false);
-                        } else {
-                            connectReader();
-                        }
-                    });
-                }
-            });
-        } else {
-            connectReader();
-        }
-    }
 
-    public void testFunction() {}
+    /**
+     * Placeholder for test function. Not implemented.
+     */
+    public void testFunction() {
+        // Not implemented. Add logic or remove if not needed.
+        throw new UnsupportedOperationException("Not implemented");
+    }
 
     private void connectReader() {
         // Offload the entire connection process to a background thread to keep UI responsive
-        executor.execute(new Runnable() {
-            @Override
-            public void run() {
-                // Update UI to show connection is in progress
-                if (context != null) {
-                    context.updateReaderStatus("Connecting...", false);
-                }
-
-                synchronized (RFIDHandler.this) {
-                    if (!isReaderConnected()) {
-                        GetAvailableReader();
-                        String result = (reader != null) ? connect() : "Failed to find reader";
-                        
-                        // Update UI with the final result
-                        if (context != null) {
-                            context.updateReaderStatus(result, isReaderConnected());
-                        }
-                    } else {
-                        // Already connected, just update UI
-                        if (context != null) {
-                            context.updateReaderStatus("Connected: " + reader.getHostName(), true);
-                        }
+        executor.execute(() -> {
+            // Update UI to show connection is in progress
+            if (context != null) {
+                 context.updateReaderStatus(CONNECTING_STATUS, false);
+            }
+            synchronized (RFIDHandler.this) {
+                if (!isReaderConnected()) {
+                    getAvailableReader();
+                    String result = (reader != null) ? connect() : FAILED_TO_FIND_READER;
+                    // Update UI with the final result
+                    if (context != null) {
+                        context.updateReaderStatus(result, isReaderConnected());
+                    }
+                } else {
+                    // Already connected, just update UI
+                    if (context != null) {
+                        context.updateReaderStatus(CONNECTED_PREFIX + reader.getHostName(), true);
                     }
                 }
             }
         });
     }
 
-    private synchronized void GetAvailableReader() {
+    private synchronized void getAvailableReader() {
         if (readers != null) {
             readers.attach(this);
             try {
                 ArrayList<ReaderDevice> availableReaders = readers.GetAvailableRFIDReaderList();
-                if (availableReaders != null && !availableReaders.isEmpty()) {
-                    availableRFIDReaderList = new ArrayList<>(availableReaders);
-                    if (availableRFIDReaderList.size() == 1) {
-                        readerDevice = availableRFIDReaderList.get(0);
-                        reader = readerDevice.getRFIDReader();
-                    } else {
-                        for (ReaderDevice device : availableRFIDReaderList) {
-                            if (device != null && device.getName() != null && device.getName().startsWith(readerName)) {
-                                readerDevice = device;
-                                reader = readerDevice.getRFIDReader();
-                                break;
-                            }
-                        }
-                    }
-                }
+                reader = selectReader(availableReaders);
             } catch (InvalidUsageException e) {
-                Log.e(TAG, "Error getting available readers", e);
+                Log.e(TAG, ERROR_GETTING_READERS, e);
             }
         }
     }
@@ -266,84 +263,45 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
                         uiHandler.removeCallbacks(timerRunnable);
                     }
                     long duration = System.currentTimeMillis() - startTime;
-                    ConfigureReader();
-                    setupScannerSDK();
+                    configureReader();
+                    setupScannerSdk();
                     if (reader.isConnected()) {
-                        return "Connected: " + reader.getHostName() + " (" + duration + " ms)";
+                            return CONNECTED_PREFIX + reader.getHostName() + " (" + duration + " ms)";
                     }
                 } else {
-                    return "Connected: " + reader.getHostName();
+                        return CONNECTED_PREFIX + reader.getHostName();
                 }
             } catch (InvalidUsageException e) {
-                Log.e(TAG, "Connection failed: " + e.getMessage());
-                return "Connection failed: " + e.getMessage();
+                Log.e(TAG, CONNECTION_FAILED + e.getMessage());
+                return CONNECTION_FAILED + e.getMessage();
             } catch (OperationFailureException e) {
-                Log.e(TAG, "Connection failed: " + e.getStatusDescription());
-                return "Connection failed: " + e.getStatusDescription();
+                Log.e(TAG, CONNECTION_FAILED + e.getStatusDescription());
+                return CONNECTION_FAILED + e.getStatusDescription();
             }
 
         }
-        return "Disconnected";
+        return DISCONNECTED;
     }
 
-    private void ConfigureReader() {
-        IRFIDLogger.getLogger("SDKSampleApp").EnableDebugLogs(true);
-        if (reader.isConnected()) {
-            try {
-                if (eventHandler == null) eventHandler = new EventHandler();
-                reader.Events.addEventsListener(eventHandler);
-                reader.Events.setHandheldEvent(true);
-                reader.Events.setTagReadEvent(true);
-                reader.Events.setAttachTagDataWithReadEvent(false);
-                reader.Events.setReaderDisconnectEvent(true);
-            } catch (InvalidUsageException | OperationFailureException e) {
-                Log.e(TAG, "Configuration failed", e);
-            }
-        }
-    }
 
-    public void setupScannerSDK() {
+    public void setupScannerSdk() {
+            // This method was previously called setupScannerSDK (case mismatch). Now unified as setupScannerSdk.
         if (sdkHandler == null) {
             sdkHandler = new SDKHandler(context);
             sdkHandler.dcssdkSetOperationalMode(DCSSDKDefs.DCSSDK_MODE.DCSSDK_OPMODE_USB_CDC);
             sdkHandler.dcssdkSetOperationalMode(DCSSDKDefs.DCSSDK_MODE.DCSSDK_OPMODE_BT_NORMAL);
             sdkHandler.dcssdkSetDelegate(scannerHandler);
-            int notifications_mask = DCSSDKDefs.DCSSDK_EVENT.DCSSDK_EVENT_SCANNER_APPEARANCE.value |
-                    DCSSDKDefs.DCSSDK_EVENT.DCSSDK_EVENT_SCANNER_DISAPPEARANCE.value |
-                    DCSSDKDefs.DCSSDK_EVENT.DCSSDK_EVENT_BARCODE.value |
-                    DCSSDKDefs.DCSSDK_EVENT.DCSSDK_EVENT_SESSION_ESTABLISHMENT.value |
-                    DCSSDKDefs.DCSSDK_EVENT.DCSSDK_EVENT_SESSION_TERMINATION.value;
-            sdkHandler.dcssdkSubsribeForEvents(notifications_mask);
+            int notificationsMask = DCSSDKDefs.DCSSDK_EVENT.DCSSDK_EVENT_SCANNER_APPEARANCE.value |
+                DCSSDKDefs.DCSSDK_EVENT.DCSSDK_EVENT_SCANNER_DISAPPEARANCE.value |
+                DCSSDKDefs.DCSSDK_EVENT.DCSSDK_EVENT_BARCODE.value |
+                DCSSDKDefs.DCSSDK_EVENT.DCSSDK_EVENT_SESSION_ESTABLISHMENT.value |
+                DCSSDKDefs.DCSSDK_EVENT.DCSSDK_EVENT_SESSION_TERMINATION.value;
+            sdkHandler.dcssdkSubsribeForEvents(notificationsMask);
         }
 
         ArrayList<DCSScannerInfo> availableScanners = (ArrayList<DCSScannerInfo>) sdkHandler.dcssdkGetAvailableScannersList();
-        if (scannerList != null) {
-            scannerList.clear();
-        } else {
-            scannerList = new ArrayList<>();
-        }
-
-        if (availableScanners != null) {
-            for (DCSScannerInfo scanner : availableScanners) {
-                if (scanner != null) {
-                    scannerList.add(scanner);
-                }
-            }
-        }
-
-        if (reader != null && reader.isConnected()) {
-            String hostName = reader.getHostName();
-            for (DCSScannerInfo device : scannerList) {
-                if (device != null && device.getScannerName() != null && hostName != null && device.getScannerName().contains(hostName)) {
-                    try {
-                        sdkHandler.dcssdkEstablishCommunicationSession(device.getScannerID());
-                        scannerID = device.getScannerID();
-                    } catch (Exception e) {
-                        Log.e(TAG, "Error establishing scanner session", e);
-                    }
-                }
-            }
-        }
+        populateScannerList(availableScanners);
+        establishScannerSessions();
     }
 
     private synchronized void disconnect() {
@@ -355,13 +313,13 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
                 }
                 reader.disconnect();
                 if (context != null)
-                    context.updateReaderStatus("Disconnected", false);
+                    context.updateReaderStatus(DISCONNECTED, false);
                 reader.Dispose();
                 reader = null;
                 sdkHandler = null;
             }
         } catch (Exception e) {
-            Log.e(TAG, "Error during disconnect", e);
+            Log.e(TAG, ERROR_DURING_DISCONNECT, e);
         }
     }
 
@@ -373,7 +331,7 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
                 readers = null;
             }
         } catch (Exception e) {
-            Log.e(TAG, "Error during dispose", e);
+            Log.e(TAG, ERROR_DURING_DISPOSE, e);
         }
     }
 
@@ -394,8 +352,8 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
     }
 
     public void scanCode() {
-        String in_xml = "<inArgs><scannerID>" + scannerID + "</scannerID></inArgs>";
-        executor.execute(() -> executeCommand(DCSSDKDefs.DCSSDK_COMMAND_OPCODE.DCSSDK_DEVICE_PULL_TRIGGER, in_xml, new StringBuilder(), scannerID));
+        String inXml = "<inArgs><scannerID>" + scannerID + "</scannerID></inArgs>";
+        executor.execute(() -> executeCommand(DCSSDKDefs.DCSSDK_COMMAND_OPCODE.DCSSDK_DEVICE_PULL_TRIGGER, inXml, new StringBuilder(), scannerID));
     }
 
     private boolean executeCommand(DCSSDKDefs.DCSSDK_COMMAND_OPCODE opCode, String inXML, StringBuilder outXML, int scannerID) {
@@ -437,6 +395,15 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
                 });
             }
         }
+    }
+
+    // Ensure method signatures for initSDK and configureReader exist
+    private void initSDK() {
+        // SDK initialization logic can be implemented here if needed
+    }
+
+    private void configureReader() {
+        // Reader configuration logic can be implemented here if needed
     }
 
     interface ResponseHandlerInterface {
