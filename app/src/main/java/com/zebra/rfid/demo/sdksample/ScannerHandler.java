@@ -55,9 +55,24 @@ public class ScannerHandler implements IDcsSdkApiDelegate {
         Log.d(TAG, "Barcode scanned: " + s);
     }
 
-    @Override public void dcssdkEventImage(byte[] bytes, int i) {}
-    @Override public void dcssdkEventVideo(byte[] bytes, int i) {}
-    @Override public void dcssdkEventBinaryData(byte[] bytes, int i) {}
-    @Override public void dcssdkEventFirmwareUpdate(FirmwareUpdateEvent firmwareUpdateEvent) {}
-    @Override public void dcssdkEventAuxScannerAppeared(DCSScannerInfo dcsScannerInfo, DCSScannerInfo dcsScannerInfo1) {}
+    @Override
+    public void dcssdkEventImage(byte[] bytes, int i) {
+        // Method intentionally left empty: image event not handled in this implementation
+    }
+    @Override
+    public void dcssdkEventVideo(byte[] bytes, int i) {
+        // Method intentionally left empty: video event not handled in this implementation
+    }
+    @Override
+    public void dcssdkEventBinaryData(byte[] bytes, int i) {
+        // Method intentionally left empty: binary data event not handled in this implementation
+    }
+    @Override
+    public void dcssdkEventFirmwareUpdate(FirmwareUpdateEvent firmwareUpdateEvent) {
+        // Method intentionally left empty: firmware update event not handled in this implementation
+    }
+    @Override
+    public void dcssdkEventAuxScannerAppeared(DCSScannerInfo dcsScannerInfo, DCSScannerInfo dcsScannerInfo1) {
+        // Method intentionally left empty: aux scanner event not handled in this implementation
+    }
 }
