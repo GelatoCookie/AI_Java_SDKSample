@@ -146,12 +146,32 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
             executor.execute(() -> {
                 InvalidUsageException exception = null;
                 try {
+                    Log.d(TAG, "ECRT: #1 Getting Available Readers in SERVICE_USB");;
                     readers = new Readers(context, ENUM_TRANSPORT.SERVICE_USB);
                     ArrayList<ReaderDevice> list = readers.GetAvailableRFIDReaderList();
                     availableRFIDReaderList = (list != null) ? new ArrayList<>(list) : new ArrayList<>();
-                    
+
                     if (availableRFIDReaderList.isEmpty()) {
+                        Log.d(TAG, "ECRT: #2 Getting Available Readers in RE_SERIAL");;
+                        readers.setTransport(ENUM_TRANSPORT.RE_SERIAL);
+                        list = readers.GetAvailableRFIDReaderList();
+                        availableRFIDReaderList = (list != null) ? new ArrayList<>(list) : new ArrayList<>();
+                    }
+                    if (availableRFIDReaderList.isEmpty()) {
+                        Log.d(TAG, "ECRT: #3 Getting Available Readers in RE_USB");;
+                        readers.setTransport(ENUM_TRANSPORT.RE_USB);
+                        list = readers.GetAvailableRFIDReaderList();
+                        availableRFIDReaderList = (list != null) ? new ArrayList<>(list) : new ArrayList<>();
+                    }
+                    if (availableRFIDReaderList.isEmpty()) {
+                        Log.d(TAG, "ECRT: #4 Getting Available Readers in BLUETOOTH");;
                         readers.setTransport(ENUM_TRANSPORT.BLUETOOTH);
+                        list = readers.GetAvailableRFIDReaderList();
+                        availableRFIDReaderList = (list != null) ? new ArrayList<>(list) : new ArrayList<>();
+                    }
+                    if (availableRFIDReaderList.isEmpty()) {
+                        Log.d(TAG, "ECRT: #5 Getting Available Readers in ALL");;
+                        readers.setTransport(ENUM_TRANSPORT.ALL);
                         list = readers.GetAvailableRFIDReaderList();
                         availableRFIDReaderList = (list != null) ? new ArrayList<>(list) : new ArrayList<>();
                     }
