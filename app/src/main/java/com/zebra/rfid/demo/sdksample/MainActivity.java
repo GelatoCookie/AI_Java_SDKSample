@@ -46,7 +46,8 @@ public class MainActivity extends AppCompatActivity implements RFIDHandler.Respo
         String appName = getString(R.string.app_name);
         try {
             setTitle(appName + " (" + com.zebra.rfid.api3.BuildConfig.VERSION_NAME + ")");
-        } catch (Exception ignored) {
+        } catch (Exception e) {
+            /* Exception intentionally ignored for compatibility with Java 8. */
             setTitle(appName);
         }
 

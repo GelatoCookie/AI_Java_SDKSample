@@ -201,7 +201,10 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
         }
     }
 
-    public void testFunction() {}
+    public void testFunction() {
+        // This method is intentionally left empty for future extension or testing purposes.
+        throw new UnsupportedOperationException("testFunction() is not implemented yet.");
+    }
 
     private void connectReader() {
         executor.execute(() -> {
@@ -431,10 +434,11 @@ class RFIDHandler implements Readers.RFIDReaderEventHandler {
             if (reader != null && reader.isConnected()) reader.Actions.Inventory.stop();
         } catch (InvalidUsageException | OperationFailureException e) {
             Log.e(TAG, "Error stopping inventory", e);
-                        Log.e(TAG, CONNECTION_FAILED, e);
+            Log.e(TAG, CONNECTION_FAILED, e);
+        }
     }
 
-                        Log.e(TAG, CONNECTION_FAILED, e);
+    public void scanCode() {
         String inXml = "<inArgs><scannerID>" + scannerID + "</scannerID></inArgs>";
         executor.execute(() -> executeCommand(DCSSDKDefs.DCSSDK_COMMAND_OPCODE.DCSSDK_DEVICE_PULL_TRIGGER, inXml, scannerID));
     }
